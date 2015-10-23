@@ -2,6 +2,65 @@
 
 open Misc
 
+/// Union Find Forest
+module UFF =
+  type Node<'a> =
+    { Value: 'a
+    /// None iff this node is root
+    ; Parent: Node<'a> option ref
+    ; Rank: int ref
+    }
+    with
+      static member value {Value = v} = v
+
+  type private UnionFindForest<'a when 'a: comparison> =
+      Map<'a, Node<'a>>
+
+  let ofSeq s =
+      let gen x =
+          (x, {Value = x; Parent = ref None; Rank = ref 1})
+      new UnionFindForest<'a> (s |> Seq.map gen)
+    
+  let init n f = Seq.init n f |> ofSeq
+
+  let rec private findRootNode x uff =
+      let n = uff |> Map.find x
+      match (! n.Parent) with
+      | None -> n
+      | Some p ->
+          let root = uff |> findRootNode (p.Value)
+          n.Parent := Some root  // compress
+          root
+
+  let root x uff =
+      findRootNode x uff |> Node<_>.value
+
+  let connects x y uff =
+      let x = root x uff
+      let y = root y uff
+      (x = y)
+
+  let merge x y uff =
+      let n1 = findRootNode x uff
+      let n2 = findRootNode y uff
+      if n1 <> n2 then
+          if (! n1.Rank) < (! n2.Rank) then
+              n1.Parent := Some n2
+          else
+              n2.Parent := Some n1
+              if (! n1.Rank) = (! n2.Rank) then
+                  n1.Rank := (! n1.Rank) + 1
+
+  let groups uff =
+      uff |> Map.toSeq |> Seq.map snd
+          |> Seq.groupBy (fun n -> uff |> root (n.Value))
+          |> Seq.map (fun (_, g) -> g |> Seq.map Node<_>.value)
+
+  /// Sequence of representative elements
+  let reprs uff =
+      uff |> Map.filter (fun _ n -> (! n.Parent) = None)
+          |> Map.toSeq |> Seq.map (snd >> Node<_>.value)
+
 // (cf. <http://qiita.com/nida_001/items/bc244187f3c1b97b8984>)
 module LeftistTree =
   type private Heap<'a when 'a: comparison> =
