@@ -134,3 +134,129 @@ module LeftistTree =
 
   let toList h =
       h |> fold (fun s x -> x :: s) [] |> List.rev
+
+[<RequireQualifiedAccess>]
+module BinomialHeap =
+  type Node<'T> =
+    internal
+      {
+        Rank      : int
+        Value     : 'T
+        Children  : Node<'T> list
+      }
+
+  [<RequireQualifiedAccess>]
+  module internal Node =
+    let rank (n: Node<_>) =
+      n.Rank
+
+    let value (n: Node<_>) =
+      n.Value
+
+    let children (n: Node<_>) =
+      n.Children
+
+    let length n =
+      1 <<< (rank n)
+
+    let singleton x =
+      {
+        Rank      = 0
+        Value     = x
+        Children  = []
+      }
+
+    let rec map f n =
+      { n with
+          Value     = f (value n)
+          Children  = n |> children |> List.map (map f)
+      }
+
+    /// Link two nodes with the same rank
+    let rec link l r =
+      assert (rank l = rank r)
+      if value l <= value r then
+        {
+          Rank      = rank l + 1
+          Value     = value l
+          Children  = r :: children l
+        }
+      else
+        link r l
+
+  type Heap<'T> =
+    internal
+    | Heap of Node<'T> list
+
+  let empty =
+    Heap []
+
+  let isEmpty (Heap ns) =
+    ns |> List.isEmpty
+
+  let length (Heap ns) =
+    ns |> List.sumBy Node.length
+
+  let rec insertTree n (Heap ns) =
+    match ns with
+    | [] -> Heap [n]
+    | n' :: ns' ->
+        if Node.rank n < Node.rank n' then
+          Heap (n :: ns)
+        else
+          assert (Node.rank n = Node.rank n')
+          insertTree (Node.link n n') (Heap ns')
+
+  let insert x =
+    insertTree (Node.singleton x)
+
+  let rec merge (Heap l) (Heap r) =
+    match (l, r) with
+    | (l, []) -> Heap l
+    | ([], r) -> Heap r
+    | (lh :: lt, rh :: rt) ->
+        if Node.rank lh < Node.rank rh then
+          let (Heap m) = merge (Heap lt) (Heap r)
+          Heap (lh :: m)
+        elif Node.rank lh > Node.rank rh then
+          let (Heap m) = merge (Heap l) (Heap rt)
+          Heap (rh :: m)
+        else
+          insertTree (Node.link lh rh) (merge (Heap lt) (Heap rt))
+
+  let rec removeMinTree (Heap ns) =
+    match ns with
+    | [] -> None
+    | [n] -> Some (n, Heap [])
+    | n :: ns ->
+        removeMinTree (Heap ns)
+        |> Option.map (fun (n', Heap ns') ->
+            if Node.value n <= Node.value n' 
+            then (n, Heap ns)
+            else (n', Heap ns')
+            )
+
+  let head h =
+    removeMinTree h
+    |> Option.map (fst >> Node.value)
+
+  let tail h =
+    match removeMinTree h with
+    | None -> h
+    | Some (n, h') ->
+        merge (n |> Node.children |> List.rev |> Heap) h'
+
+  let rec toList h =
+    match head h with
+    | None -> []
+    | Some x ->
+        x :: toList (tail h)
+
+  let rec ofList =
+    function
+    | [] -> empty
+    | x :: t ->
+        ofList t |> insert x
+
+  let map f (Heap ns) =
+    ns |> List.map (Node.map f) |> Heap
