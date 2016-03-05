@@ -260,3 +260,48 @@ module BinomialHeap =
 
   let map f (Heap ns) =
     ns |> List.map (Node.map f) |> Heap
+
+[<RequireQualifiedAccess>]
+module RedBlackTree =
+  type Color =
+    internal
+    | R
+    | B
+
+  type Tree<'K, 'V when 'K: comparison> = 
+    internal
+    | E
+    | T
+      of  Color
+      *   left: Tree<'K, 'V>
+      *   key: 'K
+      *   value: 'V
+      *   right: Tree<'K, 'V>
+
+  let rec tryFind x = function
+    | E -> None
+    | T (_, left, key, value, right) ->
+        if   x < key then tryFind x left
+        elif x > key then tryFind x right
+        else Some value
+
+  let balance color left key elem right =
+    match color, left, key, elem, right with
+    | (B, T (R, T (R, a, x, xe, b), y, ye, c), z, ze, d) -> T (R, T (B, a, x, xe, b), y, ye, T (B, c, z, ze, d))
+    | (B, T (R, a, x, xe, T (R, b, y, ye, c)), z, ze, d) -> T (R, T (B, a, x, xe, b), y, ye, T (B, c, z, ze, d))
+    | (B, a, x, xe, T (R, T (R, b, y, ye, c), z, ze, d)) -> T (R, T (B, a, x, xe, b), y, ye, T (B, c, z, ze, d))
+    | (B, a, x, xe, T (R, b, y, ye, T (R, c, z, ze, d))) -> T (R, T (B, a, x, xe, b), y, ye, T (B, c, z, ze, d))
+    | _ -> T (color, left, key, elem, right)
+
+  let insert x e s =
+    let rec ins = function
+        | E -> T (R, E, x, e, E)
+        | T (color, a, y, ye, b) ->
+            if   x < y then balance color (ins a) y ye b
+            elif x > y then balance color a y ye (ins b)
+            else T (color, a, x, e, b)
+    match ins s with
+    | E -> (assert false; E)
+    | T (_, a, y, ye, b) -> T (B, a, y, ye, b)
+
+  let empty = E
